@@ -52,6 +52,28 @@ object recursion {
    * F0 = 0, F1 = 1, Fn = Fn-1 + Fn - 2
    */
 
+  // without recursion
+  def fibonacci(n: Int): Int = {
+    if (n <= 1) n
+    else {
+      var curr = 1
+      var prev = 0
+      var counter = n
+      while (counter != 2) {
+        val tmp = curr
+        curr = curr + prev
+        prev = tmp
+        counter -= 1
+      }
+      curr + prev
+    }
+  }
+
+  // recursion
+  def fibonacciRec(n: Int): Int = {
+    if (n <= 1) n
+    else fibonacciRec(n - 1) + fibonacciRec(n - 2)
+  }
 
 }
 
@@ -101,25 +123,6 @@ object hof{
   val p: Int => Int = partial(3, sum)
   p(2) // 5
   p(3) // 5
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 
@@ -140,13 +143,13 @@ object hof{
   class Dog extends Animal
   class Cat extends Animal
 
-  def treat(animal: Animal): Unit = ???
-  def treat(animal: Option[Animal]): Unit = ???
+  //def treat(animal: Animal): Unit = ???
+  //def treat(animal: Option[Animal]): Unit = ???
 
-  val d: Dog = ???
-  val dOpt: Option[Dog] = ???
-  treat(d)
-  treat(dOpt)
+  //val d: Dog = ???
+  //val dOpt: Option[Dog] = ???
+  //treat(d)
+  //treat(dOpt)
 
   /**
    *
@@ -158,34 +161,60 @@ object hof{
   // 2. Covariance
   // 3. Contrvariance
 
-  trait Option[+T]{
+  sealed trait Option[+T] {
     def isEmpty: Boolean = if(this.isInstanceOf[None.type]) true else false
 
-    def get: T = ???
+    def get: T = {
+      this match {
+        case None => throw new NoSuchElementException("empty Option")
+        case Some(v) => v
+      }
+    }
 
     def map[B](f: T => B): Option[B] = flatMap(v => Option(f(v)))
 
-    def flatMap[B](f: T => Option[B]): Option[B] = ???
+    def flatMap[B](f: T => Option[B]): Option[B] = {
+      this match {
+        case Some(v) => f(v)
+        case None => None
+      }
+    }
+
+    def printIfAny() = {
+      this match {
+        case Some(v) => println(v.toString)
+        case None => ()
+      }
+    }
+
+    def zip[R](v: Option[R]): Option[(T, R)]  = {
+      (this, v) match {
+        case (Some(t), Some(r)) => Some((t, r))
+        case _ => None
+      }
+    }
+
+    def filter(f: T => Boolean): Option[T] = {
+      this match {
+        case Some(t) if f(t) => this
+        case _ => None
+      }
+    }
   }
 
   object Option{
     def apply[T](v: T): Option[T] = Some(v)
   }
 
-  val o1: Option[Int] = ???
+  //val o1: Option[Int] = ???
 
-  val o2: Option[Int] = o1.map(_ + 2)
+  //val o2: Option[Int] = o1.map(_ + 2)
 
   case class Some[T](v: T) extends Option[T]
   case object None extends Option[Nothing]
 
   var o: Option[Animal] = None
   var i: Option[Int] = None
-
-
-
-
-
 
 
   /**
@@ -218,15 +247,81 @@ object hof{
     */
 
 
-   trait List[+T]{
-     def ::[TT >: T](elem: TT): List[TT] = ???
+   sealed trait List[+T]{
+     def ::[TT >: T](elem: TT): List[TT] = {
+       new ::(elem, this)
+     }
+
+     def reverse: List[T] = List.reverse_(remainder = this)
+
+     def map[R](f: T => R): List[R] = List.map_(this, f)
+
+     def flatMap[R](f: T => List[R]): List[R] = List.flatten(this.map(f))
+
+     def filter(f: T => Boolean): List[T] = List.filter_(this, f)
+
+     def mkString(sep: String): String = List.mkString_(this, sep)
    }
+
    case class ::[T](head: T, tail: List[T]) extends List[T]
    case object Nil extends List[Nothing]
 
    object List{
      def apply[A](v: A*): List[A] = if(v.isEmpty) Nil
      else new ::(v.head, apply(v.tail:_*))
+
+     private def reverse_[T](acc: List[T] = Nil, remainder: List[T]): List[T] = {
+       remainder match {
+         case Nil => acc
+         case ::(head, tail) => reverse_(::(head, acc), tail)
+       }
+     }
+
+     private def map_[T,R](list: List[T], f: T => R, acc: List[R] = Nil): List[R] = {
+       list match {
+         case Nil => acc.reverse
+         case ::(head, tail) => map_(tail, f, ::(f(head), acc))
+       }
+     }
+
+     private def concatLists[T](list1: List[T], list2: List[T], acc: List[T] = Nil): List[T] = {
+       (list1, list2) match {
+         case (Nil, Nil) => acc.reverse
+         case (::(head, tail), snd) => concatLists(tail, snd, ::(head, acc))
+         case (Nil, ::(head, tail)) => concatLists(Nil, tail, ::(head, acc))
+       }
+     }
+
+     private def flatten[T](list: List[List[T]], acc: List[T] = Nil): List[T] = {
+       list match {
+         case Nil => acc.reverse
+         case ::(head, tail) => flatten(tail, concatLists(head, acc))
+       }
+     }
+
+     private def filter_[T](list: List[T], f: T => Boolean, acc: List[T] = Nil): List[T] = {
+       list match {
+         case Nil => acc.reverse
+         case ::(head, tail) => filter_(
+           list = tail, f = f, acc = if (f(head)) ::(head, acc) else acc
+         )
+       }
+     }
+
+     private def mkString_[T](list: List[T], sep: String, buf: String = ""): String = {
+       list match {
+         case Nil => buf
+         case ::(head, tail) => mkString_(tail, sep, if (buf == "") head.toString else buf + sep + head.toString)
+       }
+     }
+
+     def incList(list: List[Int]): List[Int] = {
+      list.map(elem => elem + 1)
+     }
+
+     def shoutString(list: List[String]): List[String] = {
+       list.map(elem => "!" + elem)
+     }
    }
 
    val l1: List[Nothing] = List()
